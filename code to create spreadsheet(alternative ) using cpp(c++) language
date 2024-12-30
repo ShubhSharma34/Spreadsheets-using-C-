@@ -1,0 +1,555 @@
+#include <iostream>
+#include <vector>
+#include <string>
+#include <iomanip>
+#include <fstream>
+#include <sstream>
+#include <limits>
+#include <algorithm>
+#include <cmath>
+
+using namespace std;
+
+class Excel {
+private:
+    vector<vector<string>> table;
+
+public:
+    Excel() {
+        table.resize(10, vector<string>(10, ""));
+    }
+
+    string truncate(const string& str, size_t width) {
+        if (str.length() > width) {
+            return str.substr(0, width - 3) + "...";  // Truncate and add ellipsis
+        }
+        return str;
+    }
+
+    // Function to calculate the width of each column based on the content
+    vector<int> calculateColumnWidths() {
+        vector<int> colWidths(table[0].size(), 0);
+
+        // Determine the maximum width for each column based on the content in all rows
+        for (size_t j = 0; j < table[0].size(); ++j) {
+            for (size_t i = 0; i < table.size(); ++i) {
+                if (table[i][j].length() > colWidths[j]) {
+                    colWidths[j] = table[i][j].length();
+                }
+            }
+        }
+
+        return colWidths;
+    }
+
+    void displayTable() {
+        // Determine how many columns have non-empty headers (row 0)
+        size_t numCols = 0;
+        for (const string& cell : table[0]) {
+            if (!cell.empty()) {
+                ++numCols;
+            }
+        }
+
+        if (numCols == 0) {
+            cout << "No data to display in Row 0.\n";
+            return;
+        }
+
+        vector<int> colWidths = calculateColumnWidths();
+
+        // Print top border for headers
+        cout << "+";
+        for (size_t j = 0; j < numCols; ++j) {
+            cout << string(colWidths[j] + 2, '-') << "+";
+        }
+        cout << endl;
+
+        // Print header row (Row 0)
+        cout << "|";
+        for (size_t j = 0; j < numCols; ++j) {
+            cout << " " << setw(colWidths[j]) << left << table[0][j] << " |";
+        }
+        cout << endl;
+
+        // Print separator between header and data rows
+        cout << "+";
+        for (size_t j = 0; j < numCols; ++j) {
+            cout << string(colWidths[j] + 2, '-') << "+";
+        }
+        cout << endl;
+
+        // Print rows that have at least one non-empty column
+        for (size_t i = 1; i < table.size(); ++i) {
+            bool rowHasData = false;
+
+            // Check if the row has any data
+            for (size_t j = 0; j < numCols; ++j) {
+                if (!table[i][j].empty()) {
+                    rowHasData = true;
+                    break;
+                }
+            }
+
+            // Print the row if it has data
+            if (rowHasData) {
+                cout << "|";
+                for (size_t j = 0; j < numCols; ++j) {
+                    cout << " " << setw(colWidths[j]) << left << table[i][j] << " |";
+                }
+                cout << endl;
+            }
+        }
+
+        // Print bottom border
+        cout << "+";
+        for (size_t j = 0; j < numCols; ++j) {
+            cout << string(colWidths[j] + 2, '-') << "+";
+        }
+        cout << endl;
+    }
+
+    void inputValue(int row, int col, const string& value) {
+        if (row >= table.size()) table.resize(row + 1, vector<string>(table[0].size(), ""));
+        if (col >= table[0].size()) table[0].resize(col + 1, "");
+
+        table[row][col] = value;
+    }
+
+    void deleteValue(int row, int col) {
+        if (row < table.size() && col < table[row].size()) {
+            table[row][col] = "";
+        }
+        else {
+            cout << "Invalid cell reference!\n";
+        }
+    }
+
+    void mergeRows(int row1, int row2) {
+        if (row1 < table.size() && row2 < table.size()) {
+            for (size_t j = 0; j < table[row1].size(); ++j) {
+                table[row1][j] += " " + table[row2][j];
+            }
+            table.erase(table.begin() + row2);
+        }
+        else {
+            cout << "Invalid row reference!\n";
+        }
+    }
+
+    void mergeColumns(int col1, int col2) {
+        if (col1 < table[0].size() && col2 < table[0].size()) {
+            for (size_t i = 0; i < table.size(); ++i) {
+                table[i][col1] += " " + table[i][col2];
+            }
+            for (auto& row : table) {
+                row.erase(row.begin() + col2);
+            }
+        }
+        else {
+            cout << "Invalid column reference!\n";
+        }
+    }
+
+    // Mathematical Functions
+    double autoSum(int col) {
+        double sum = 0.0;
+
+        for (size_t i = 1; i < table.size(); ++i) { // Start from row 1 to skip the header row
+            const string& cell = table[i][col];
+
+            if (!cell.empty()) { // Check if the cell is not empty
+                try {
+                    sum += stod(cell); // Convert string to double
+                }
+                catch (const invalid_argument& e) {
+                    // Ignore non-numeric values
+                    continue;
+                }
+            }
+        }
+        return sum;
+    }
+
+    double average(int col) {
+        double sum = 0;
+        int count = 0;
+        for (size_t i = 0; i < table.size(); ++i) {
+            if (!table[i][col].empty()) {
+                try {
+                    sum += stod(table[i][col]);
+                    ++count;
+                }
+                catch (const invalid_argument&) {
+                    // Skip non-numeric values
+                    continue;
+                }
+            }
+        }
+        return count == 0 ? 0 : sum / count;
+    }
+
+    double minValue(int col) {
+        double minVal = numeric_limits<double>::max();
+        for (size_t i = 0; i < table.size(); ++i) {
+            if (!table[i][col].empty()) {
+                try {
+                    minVal = min(minVal, stod(table[i][col]));
+                }
+                catch (const invalid_argument&) {
+                    // Skip non-numeric values
+                    continue;
+                }
+            }
+        }
+        return minVal;
+    }
+
+    double maxValue(int col) {
+        double maxVal = numeric_limits<double>::lowest();
+        for (size_t i = 0; i < table.size(); ++i) {
+            if (!table[i][col].empty()) {
+                try {
+                    maxVal = max(maxVal, stod(table[i][col]));
+                }
+                catch (const invalid_argument&) {
+                    // Skip non-numeric values
+                    continue;
+                }
+            }
+        }
+        return maxVal;
+    }
+
+    int countNumbers(int col) {
+        int count = 0;
+        for (size_t i = 0; i < table.size(); ++i) {
+            if (!table[i][col].empty()) {
+                try {
+                    stod(table[i][col]);  // Check if it can be converted to a number
+                    ++count;
+                }
+                catch (const invalid_argument&) {
+                    // Skip non-numeric values
+                    continue;
+                }
+            }
+        }
+        return count;
+    }
+
+    int countNonEmpty(int col) {
+        int count = 0;
+        for (size_t i = 0; i < table.size(); ++i) {
+            if (!table[i][col].empty()) {
+                ++count;
+            }
+        }
+        return count;
+    }
+
+    double roundValue(int col, int precision) {
+        double value = 0.0;
+        int count = 0;
+        for (size_t i = 0; i < table.size(); ++i) {
+            if (!table[i][col].empty()) {
+                try {
+                    value = stod(table[i][col]);  // Example for rounding a single value
+                    break;
+                }
+                catch (const invalid_argument&) {
+                    // Skip non-numeric values
+                    continue;
+                }
+            }
+        }
+        double multiplier = pow(10.0, precision);
+        return round(value * multiplier) / multiplier;
+    }
+
+    void insertRow(int index) {
+        if (index <= table.size()) {
+            table.insert(table.begin() + index, vector<string>(table[0].size(), ""));
+        }
+        else {
+            cout << "Invalid index!\n";
+        }
+    }
+
+    void insertColumn(int index) {
+        if (index <= table[0].size()) {
+            for (auto& row : table) {
+                row.insert(row.begin() + index, "");
+            }
+        }
+        else {
+            cout << "Invalid index!\n";
+        }
+    }
+
+    void deleteRow(int index) {
+        if (index < table.size()) {
+            table.erase(table.begin() + index);
+        }
+        else {
+            cout << "Invalid index!\n";
+        }
+    }
+
+    void deleteColumn(int index) {
+        if (index < table[0].size()) {
+            for (auto& row : table) {
+                row.erase(row.begin() + index);
+            }
+        }
+        else {
+            cout << "Invalid index!\n";
+        }
+    }
+
+    void saveToFile(const string& filename) {
+        ofstream outFile(filename);
+
+        if (!outFile) {
+            cout << "Error opening file for writing!\n";
+            return;
+        }
+
+        // Save dimensions first
+        outFile << table.size() << " " << table[0].size() << "\n";
+
+        for (size_t i = 0; i < table.size(); ++i) {
+            for (size_t j = 0; j < table[i].size(); ++j) {
+                // Escape special characters and handle spaces
+                string escapedCell = table[i][j];
+
+                // Replace backslash with double backslash
+                size_t pos = 0;
+                while ((pos = escapedCell.find("\\", pos)) != string::npos) {
+                    escapedCell.replace(pos, 1, "\\\\");
+                    pos += 2;
+                }
+
+                // Replace tab with escaped tab
+                pos = 0;
+                while ((pos = escapedCell.find("\t", pos)) != string::npos) {
+                    escapedCell.replace(pos, 1, "\\t");
+                    pos += 2;
+                }
+
+                // Enclose cell content in quotes to preserve spaces
+                outFile << "\"" << escapedCell << "\"\t";
+            }
+            outFile << "\n";
+        }
+
+        outFile.close();
+        cout << "Table saved to " << filename << "\n";
+    }
+
+    void loadFromFile(const string& filename) {
+        ifstream inFile(filename);
+
+        if (!inFile) {
+            cout << "Error opening file for reading!\n";
+            return;
+        }
+
+        size_t rows, cols;
+        inFile >> rows >> cols;
+        inFile.ignore(); // Ignore newline
+
+        table.resize(rows, vector<string>(cols, ""));
+
+        string line;
+        for (size_t i = 0; i < rows; ++i) {
+            if (!getline(inFile, line)) break;
+
+            istringstream lineStream(line);
+            string cell;
+            for (size_t j = 0; j < cols; ++j) {
+                if (!getline(lineStream, cell, '\t')) break;
+
+                // Remove surrounding quotes
+                if (cell.front() == '"' && cell.back() == '"') {
+                    cell = cell.substr(1, cell.length() - 2);
+                }
+
+                // Unescape special characters
+                size_t pos = 0;
+                while ((pos = cell.find("\\\\", pos)) != string::npos) {
+                    cell.replace(pos, 2, "\\");
+                    pos += 1;
+                }
+
+                pos = 0;
+                while ((pos = cell.find("\\t", pos)) != string::npos) {
+                    cell.replace(pos, 2, "\t");
+                    pos += 1;
+                }
+
+                table[i][j] = cell;
+            }
+        }
+
+        inFile.close();
+        cout << "Table loaded from " << filename << "\n";
+    }
+};
+
+int main() {
+    Excel table;
+    int choice, row, col, row1, row2, col1, col2, precision;
+    string value, filename;
+
+    do {
+        cout << "\nMenu:\n";
+        cout << "1. Input value in cell (row:column)\n";
+        cout << "2. Delete value from cell (row:column)\n";
+        cout << "3. Merge rows\n";
+        cout << "4. Merge columns\n";
+        cout << "5. Perform Mathematical Function\n";
+        cout << "6. Insert row at index\n";
+        cout << "7. Insert column at index\n";
+        cout << "8. Delete row at index\n";
+        cout << "9. Delete column at index\n";
+        cout << "10. Save table to file\n";
+        cout << "11. Load table from file\n";
+        cout << "12. Display Table\n";
+        cout << "13. Exit\n";
+        cout << "Enter your choice: ";
+        cin >> choice;
+
+        switch (choice) {
+        case 1:
+            cout << "Enter row: ";
+            cin >> row;
+            cout << "Enter column: ";
+            cin >> col;
+            cout << "Enter value: ";
+            cin.ignore(numeric_limits<streamsize>::max(), '\n'); // Ignore remaining input
+            getline(cin, value);
+            table.inputValue(row, col, value);
+            break;
+
+        case 2:
+            cout << "Enter row: ";
+            cin >> row;
+            cout << "Enter column: ";
+            cin >> col;
+            table.deleteValue(row, col);
+            break;
+
+        case 3:
+            cout << "Enter first row to merge: ";
+            cin >> row1;
+            cout << "Enter second row to merge: ";
+            cin >> row2;
+            table.mergeRows(row1, row2);
+            break;
+
+        case 4:
+            cout << "Enter first column to merge: ";
+            cin >> col1;
+            cout << "Enter second column to merge: ";
+            cin >> col2;
+            table.mergeColumns(col1, col2);
+            break;
+
+        case 5:
+            int mathChoice;
+            cout << "\nMathematical Functions:\n";
+            cout << "1. AutoSum\n";
+            cout << "2. Average\n";
+            cout << "3. Min\n";
+            cout << "4. Max\n";
+            cout << "5. Count Numbers\n";
+            cout << "6. Count Non-Empty\n";
+            cout << "7. Round\n";
+            cout << "Enter your choice: ";
+            cin >> mathChoice;
+            cout << "Enter column to perform the operation on: ";
+            cin >> col;
+
+            switch (mathChoice) {
+            case 1:
+                cout << "AutoSum of column " << col << " = " << table.autoSum(col) << "\n";
+                break;
+            case 2:
+                cout << "Average of column " << col << " = " << table.average(col) << "\n";
+                break;
+            case 3:
+                cout << "Min of column " << col << " = " << table.minValue(col) << "\n";
+                break;
+            case 4:
+                cout << "Max of column " << col << " = " << table.maxValue(col) << "\n";
+                break;
+            case 5:
+                cout << "Count of numbers in column " << col << " = " << table.countNumbers(col) << "\n";
+                break;
+            case 6:
+                cout << "Count of non-empty cells in column " << col << " = " << table.countNonEmpty(col) << "\n";
+                break;
+            case 7:
+                cout << "Enter precision for rounding: ";
+                cin >> precision;
+                cout << "Rounded sum of column " << col << " = " << table.roundValue(col, precision) << "\n";
+                break;
+            default:
+                cout << "Invalid mathematical function choice!\n";
+                break;
+            }
+            break;
+
+        case 6:
+            cout << "Enter row index to insert: ";
+            cin >> row;
+            table.insertRow(row);
+            break;
+
+        case 7:
+            cout << "Enter column index to insert: ";
+            cin >> col;
+            table.insertColumn(col);
+            break;
+
+        case 8:
+            cout << "Enter row index to delete: ";
+            cin >> row;
+            table.deleteRow(row);
+            break;
+
+        case 9:
+            cout << "Enter column index to delete: ";
+            cin >> col;
+            table.deleteColumn(col);
+            break;
+
+        case 10:
+            cout << "Enter filename to save the table: ";
+            cin >> filename;
+            table.saveToFile(filename);
+            break;
+
+        case 11:
+            cout << "Enter filename to load the table: ";
+            cin >> filename;
+            table.loadFromFile(filename);
+            break;
+
+        case 12:
+            table.displayTable();
+            break;
+
+        case 13:
+            cout << "Exiting...\n";
+            cout << "Thank You!\n";
+            break;
+
+        default:
+            cout << "Invalid choice! Please try again.\n";
+        }
+    } while (choice != 13);
+
+    return 0;
+}
